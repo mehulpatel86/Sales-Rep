@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Drug Rep Visit Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .form-section { margin-bottom: 20px; }
+        label { display: block; margin: 5px 0; }
+        select, input, textarea { width: 200px; margin-bottom: 10px; }
+        #visitTable { border-collapse: collapse; width: 100%; }
+        #visitTable th, #visitTable td { border: 1px solid #ddd; padding: 8px; }
+        #lastVisitPopup { display: none; position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: white; padding: 20px; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+    <h1>Drug Rep Visit Tracker</h1>
+
+    <!-- Visit Entry Form -->
+    <div class="form-section">
+        <h2>Record New Visit</h2>
+        <label>Date of Visit: <input type="date" id="visitDate"></label>
+        
+        <label>Doctor Name:
+            <select id="doctorName" onchange="updateDoctorInfo(); showLastVisit();">
+                <option value="">Select Doctor</option>
+            </select>
+        </label>
+        
+        <label>Office/Address: <input type="text" id="address" readonly></label>
+        <label>Phone: <input type="text" id="phone" readonly></label>
+        
+        <label>Provided:
+            <select id="provided">
+                <option value="none">None</option>
+                <option value="lunch">Lunch</option>
+                <option value="coffee">Coffee</option>
+                <option value="snack">Snack</option>
+            </select>
+        </label>
+        
+        <label>Comments: <textarea id="comments"></textarea></label>
+        <button onclick="submitVisit()">Submit Visit</button>
+    </div>
+
+    <!-- Add New Doctor Form -->
+    <div class="form-section">
+        <h2>Add New Doctor</h2>
+        <label>Doctor Name: <input type="text" id="newDoctor"></label>
+        <label>Office/Address: <input type="text" id="newAddress"></label>
+        <label>Phone: <input type="text" id="newPhone"></label>
+        <button onclick="addNewDoctor()">Add Doctor</button>
+    </div>
+
+    <!-- Visit History Table -->
+    <div class="form-section">
+        <h2>Visit History</h2>
+        <table id="visitTable">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Doctor</th>
+                    <th>Address</th>
+                    <th>Provided</th>
+                    <th>Comments</th>
+                    <th>Prescriptions (Avg)</th>
+                </tr>
+            </thead>
+            <tbody id="visitTableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- Last Visit Popup -->
+    <div id="lastVisitPopup">
+        <h3>Last Visit Details</h3>
+        <p id="lastVisitInfo"></p>
+        <button onclick="document.getElementById('lastVisitPopup').style.display='none'">Close</button>
+    </div>
+
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script>
+        let doctors = [
+            { name: "AMBRO CHRISTINE", address: "71 OLD MILL BOTTOM RD N STE 300 Annapolis MD 21409", phone: "4102683887", avgRx: 0 },
+            { name: "AMOS CLIFFORD", address: "200 HARRY S TRUMAN PARKWAY STE 270 Annapolis MD 21401", phone: "4108970272", avgRx: 0 },
+            { name: "ANDERSON LISA", address: "115 Sallitt Drive East Stevensville MD 21666", phone: "4433513376", avgRx: 0 },
+            { name: "BAKER KATELYN", address: "403 Marvel Ct Easton MD 21601", phone: "4108198867", avgRx: 0 },
+            { name: "Barnett Jay", address: "2401 Research Blvd Ste 260 Rockville MD 20850", phone: "3019906565", avgRx: 0 },
+            { name: "Bering Brooke", address: "532 Baltimore Blvd Suite 211 Westminster MD 21157", phone: "4107513840", avgRx: 0 },
+            { name: "Biles Natalia", address: "8601 Veterans Hwy Suite 201 Millersville MD 21108", phone: "4109345400", avgRx: 0 },
+            { name: "Bower Rebecca", address: "9256 BENDIX RD STE 200A COLUMBIA MD 21045", phone: "4435420505", avgRx: 0 },
+            { name: "BOWES KATHERINE", address: "410 Meadow Creek Dr Westminster MD 21158", phone: "4107513840", avgRx: 0 },
+            { name: "Brimhall Erin", address: "116 Defense Highway Annapolis MD 21401", phone: "8888203376", avgRx: 0 },
+            { name: "Buckel Tamy", address: "250 Haacke Drive Chestertown MD 21620", phone: "4107780003", avgRx: 0 },
+            { name: "Chen REBEKAH", address: "7671 Quarterfield Road Suite 200-B Glen Burnie MD 21061", phone: "4107660111", avgRx: 0 },
+            { name: "Chude Shevonne", address: "1838 Greene Tree Rd Baltimore MD 21208", phone: "4106023376", avgRx: 0 },
+            { name: "Clements Stephanie", address: "8601 VETERANS HWY SUITE 201 Millersville MD 21108", phone: "4109345400", avgRx: 0 },
+            { name: "Coats-Walton Debra", address: "4321 Collington Rd Ste 230 Bowie MD 20716", phone: "3018094321", avgRx: 0 },
+            { name: "COLONNA TODD", address: "2401 Research Blvd Rockville MD 20850", phone: "3019906565", avgRx: 0 },
+            { name: "Costabile Danielle", address: "560 Riverside Drive Salisbury MD 21801", phone: "8888203376", avgRx: 0 },
+            { name: "Crosswhite Alexandra", address: "8601 Veterans Highway Suite 201 Millersville MD 21108", phone: "4109345400", avgRx: 0 },
+            { name: "DELEON CHRISTINA", address: "202 St Claire Place Suite 150 Stevensville MD 21666", phone: "8888203376", avgRx: 0 },
+            { name: "DEMATTIA MICHELLE", address: "71 Old Mill Bottom Rd N Annapolis MD 21409", phone: "4102683887", avgRx: 0 },
+            { name: "DEMORY HEATHER", address: "77 Thomas Johnson Dr Ste C Frederick MD 21702", phone: "3016683004", avgRx: 0 },
+            { name: "DEWLIN LAUREN", address: "1838 Greene Tree Rd Pikesville MD 21208", phone: "4106023376", avgRx: 0 },
+            { name: "Diggs Keeley", address: "403 Marvel Court Easton MD 21601", phone: "4108198867", avgRx: 0 },
+            { name: "DILORENZO ASHLEY", address: "10313 Georgia Ave Silver Spring MD 20902", phone: "3016817000", avgRx: 0 },
+            { name: "Doshi Mackenzie", address: "10700 Charter Drive Suite 300 Columbia MD 21044", phone: "4433513376", avgRx: 0 },
+            { name: "DOSHI MACKENZIE", address: "10700 Charter Drive Suite 300 Columbia MD 21044", phone: "4433513376", avgRx: 0 },
+            { name: "Engler Amy", address: "403 Marvel Court Easton MD 21601", phone: "4108198867", avgRx: 0 },
+            { name: "Ford Diane", address: "68 Thomas Johnson Dr. Suite C Frederick MD 21702", phone: "3016945292", avgRx: 0 },
+            { name: "FRANKS Erica", address: "106 Milford Street Suite 501B Salisbury MD 21804", phone: "4108198867", avgRx: 0 },
+            { name: "GAMBER JENNIFER", address: "180 Admiral Cochrane Dr Annapolis MD 21401", phone: "4433513376", avgRx: 0 },
+            { name: "Giblin Walter", address: "15225 Shady Grove Road Suite 303 Rockville MD 20850", phone: "4433513376", avgRx: 0 },
+            { name: "Girardi Nicholas", address: "6021 UNIVERSITY BLVD Suite 390 Ellicott City MD 21043", phone: "4102030607", avgRx: 0 },
+            { name: "GOLDBERG DANIELLE", address: "71 Old Mill Bottom Rd N Annapolis MD 21409", phone: "4102683887", avgRx: 0 },
+            { name: "GREEN LAWRENCE", address: "9601 Blackwell Rd Rockville MD 20850", phone: "3016100663", avgRx: 0 },
+            { name: "Gunning Sean", address: "1838 Greene Tree Rd Baltimore MD 21208", phone: "4104863990", avgRx: 0 },
+            { name: "Hurd Tierra", address: "174 WATERFRONT STREET STE 200 National Harbor MD 20745", phone: "2404938447", avgRx: 0 },
+            { name: "Huynh Dathao", address: "9256 BENDIX RD STE 200A COLUMBIA MD 21045", phone: "4435420505", avgRx: 0 },
+            { name: "Johnson Hannah", address: "7642 Belair Rd Nottingham MD 21236", phone: "4106653093", avgRx: 0 },
+            { name: "JORDAN ELLEN", address: "403 Marvel Ct Easton MD 21601", phone: "4108198867", avgRx: 0 },
+            { name: "KANE DEAN", address: "6021 University Blvd Suite 390 Ellicott City MD 21043", phone: "4102030607", avgRx: 0 },
+            { name: "Kates Lisa", address: "2200 Defense Highway Suite 201 Crofton MD 21114", phone: "4104515500", avgRx: 0 },
+            { name: "KOKAL RACHEL", address: "71 Old Mill Bottom Rd N Annapolis MD 21409", phone: "4102683887", avgRx: 0 },
+            { name: "KUPPALI SMITHA", address: "8890 MCGAW RD 150 Columbia MD 21045", phone: "4102030607", avgRx: 0 },
+            { name: "LANPHEAR CHARLOTTE", address: "2391 Brandermill Blvd Suite 201 Gambrills MD 21054", phone: "4104510700", avgRx: 0 },
+            { name: "LAUMANN LISA", address: "180 Admiral Cochrane Dr Annapolis MD 21401", phone: "4433513376", avgRx: 0 },
+            { name: "Lin Janet", address: "10313 Georgia Ave Silver Spring MD 20902", phone: "3016817000", avgRx: 0 },
+            { name: "Linquist Allison", address: "6518 MEADOWRIDGE RD Elkridge MD 21075", phone: "4433930223", avgRx: 0 },
+            { name: "LIOTTA ELIZABETH", address: "77 Thomas Johnson Dr Frederick MD 21702", phone: "3016683004", avgRx: 0 },
+            { name: "LOCKSHIN BENJAMIN", address: "10313 GEORGIA AVE Silver Spring MD 20902", phone: "3016817000", avgRx: 0 },
+            { name: "MCGUIGAN KELLY", address: "180 Admiral Cochrane Drive Suite 410 Annapolis MD 21401", phone: "4433513376", avgRx: 0 },
+            { name: "Midwinter Rachel", address: "8601 VETERANS HWY SUITE 201 Millersville MD 21108", phone: "4109345400", avgRx: 0 },
+            { name: "MILES KATINA", address: "2401 BRANDERMILL BLVD Gambrills MD 21054", phone: "4104510500", avgRx: 0 },
+            { name: "NEIDIG LANE", address: "2568A RIVA ROAD STE 102 Annapolis MD 21401", phone: "4102160993", avgRx: 0 },
+            { name: "OGHOLIKHAN MANA", address: "7500 Greenway Center Drive Suite 1220 Greenbelt MD 20770", phone: "3016151986", avgRx: 0 },
+            { name: "Pacheco Heather", address: "231 Najoles Rd Millersville MD 21108", phone: "4438838563", avgRx: 0 },
+            { name: "PRUSSICK RONALD", address: "6163 Executive Blvd Rockville MD 20852", phone: "4433513376", avgRx: 0 },
+            { name: "RABE ALLISON", address: "403 Marvel Ct Easton MD 21601", phone: "4108198867", avgRx: 0 },
+            { name: "Reznikova Anna", address: "10910 LITTLE PATUXENT PKWY STE 205 Columbia MD 21044", phone: "4107720707", avgRx: 0 },
+            { name: "Rogers Andrew", address: "15245 Shady Grove Rd Rockville MD 20850", phone: "3016817000", avgRx: 0 },
+            { name: "SantosoPham Julia", address: "515 Fairmount Ave Towson MD 21286", phone: "4104941340", avgRx: 0 },
+            { name: "SHELL BRENDA", address: "532 Baltimore Blvd Westminster MD 21157", phone: "4107513840", avgRx: 0 },
+            { name: "SHORE RONALD", address: "4701 Randolph Rd Rockville MD 20852", phone: "3014682100", avgRx: 0 },
+            { name: "SINGH SAURABH", address: "330 2ND ST Oakland CA 94607", phone: "3016817000", avgRx: 0 },
+            { name: "SODEN CYLBURN", address: "13920 Baltimore Avenue Laurel MD 20707", phone: "3017760743", avgRx: 0 },
+            { name: "Stranahan Donald", address: "106 Milford Street Suite 501B Salisbury MD 21804", phone: "4108198867", avgRx: 0 },
+            { name: "STROBEL DAVID", address: "716 Maiden Choice Ln Catonsville MD 21228", phone: "4107479422", avgRx: 0 },
+            { name: "Sutherland Lesley", address: "8601 Veterans Hwy Suite 201 Millersville MD 21108", phone: "4109345400", avgRx: 0 },
+            { name: "TRUNNELL KRISTINA", address: "68 Thomas Johnson Dr Frederick MD 21702", phone: "3016945292", avgRx: 0 },
+            { name: "VIOLA KATHLEEN", address: "10 Fila Way Suite 205 Sparks MD 21152", phone: "4102232620", avgRx: 0 },
+            { name: "WAGENSELLER AUBREY", address: "10313 GEORGIA AVE Silver Spring MD 20902", phone: "3016817000", avgRx: 0 },
+            { name: "WANG LINDA", address: "1205 York Road Suite 39A Lutherville MD 21093", phone: "4432881870", avgRx: 0 },
+            { name: "Warnock Molly", address: "116 Defense Highway Suite 102 Annapolis MD 21401", phone: "8888203376", avgRx: 0 },
+            { name: "WESLEY SHEA", address: "9256 BENDIX RD STE 200A COLUMBIA MD 21045", phone: "4435420505", avgRx: 0 },
+            { name: "Wheat Chikoti", address: "10700 Charter Drive Columbia MD 21044", phone: "4433513376", avgRx: 0 },
+            { name: "YEON PRISCILLA", address: "14995 Shady Grove Rd Rockville MD 20850", phone: "3013585919", avgRx: 0 },
+            { name: "YOUNG CHERIE", address: "12200 ANNAPOLIS ROAD SUITE 315 Glenn Dale MD 20769", phone: "3012490970", avgRx: 0 }
+        ];
+
+        let visits = [];
+        const CLIENT_ID = 'YOUR_CLIENT_ID'; // Replace with your Google API Client ID
+        const API_KEY = 'YOUR_API_KEY';   // Replace with your Google API Key
+        const FOLDER_ID = 'YOUR_FOLDER_ID'; // Replace with your Google Drive folder ID
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+        function initClient() {
+            gapi.load('client:auth2', () => {
+                gapi.client.init({
+                    apiKey: API_KEY,
+                    clientId: CLIENT_ID,
+                    scope: SCOPES
+                }).then(() => {
+                    if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
+                        gapi.auth2.getAuthInstance().signIn();
+                    }
+                    loadVisitsFromDrive();
+                });
+            });
+        }
+
+        function loadVisitsFromDrive() {
+            gapi.client.drive.files.list({
+                q: `'${FOLDER_ID}' in parents`,
+                fields: 'files(id, name)'
+            }).then(response => {
+                const file = response.result.files.find(f => f.name === 'visits.json');
+                if (file) {
+                    gapi.client.drive.files.get({
+                        fileId: file.id,
+                        alt: 'media'
+                    }).then(res => {
+                        visits = JSON.parse(res.body);
+                        updateVisitTable();
+                    });
+                }
+            }).catch(err => console.error('Error loading visits:', err));
+        }
+
+        function saveVisitsToDrive() {
+            const fileMetadata = {
+                name: 'visits.json',
+                parents: [FOLDER_ID],
+                mimeType: 'application/json'
+            };
+            const media = {
+                mimeType: 'application/json',
+                body: JSON.stringify(visits)
+            };
+            gapi.client.drive.files.list({
+                q: `'${FOLDER_ID}' in parents name='visits.json'`
+            }).then(response => {
+                if (response.result.files.length > 0) {
+                    gapi.client.drive.files.update({
+                        fileId: response.result.files[0].id,
+                        resource: fileMetadata,
+                        media: media
+                    }).then(() => console.log('Visits updated on Drive'));
+                } else {
+                    gapi.client.drive.files.create({
+                        resource: fileMetadata,
+                        media: media
+                    }).then(() => console.log('Visits saved to Drive'));
+                }
+            });
+        }
+
+        window.onload = function() {
+            populateDoctorDropdown();
+            initClient();
+        };
+
+        function populateDoctorDropdown() {
+            const doctorSelect = document.getElementById('doctorName');
+            doctors.forEach(doc => {
+                doctorSelect.add(new Option(doc.name, doc.name));
+            });
+        }
+
+        function updateDoctorInfo() {
+            const doctorName = document.getElementById('doctorName').value;
+            const doctor = doctors.find(d => d.name === doctorName);
+            if (doctor) {
+                document.getElementById('address').value = doctor.address;
+                document.getElementById('phone').value = doctor.phone;
+            } else {
+                document.getElementById('address').value = '';
+                document.getElementById('phone').value = '';
+            }
+        }
+
+        function showLastVisit() {
+            const doctorName = document.getElementById('doctorName').value;
+            const lastVisit = visits.filter(v => v.doctor === doctorName).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+            const popup = document.getElementById('lastVisitPopup');
+            const info = document.getElementById('lastVisitInfo');
+            if (lastVisit) {
+                info.innerHTML = `Date: ${lastVisit.date}<br>Provided: ${lastVisit.provided}<br>Comments: ${lastVisit.comments}`;
+                popup.style.display = 'block';
+            } else {
+                info.innerHTML = 'No previous visits recorded.';
+                popup.style.display = 'block';
+            }
+        }
+
+        function addNewDoctor() {
+            const newDoctor = {
+                name: document.getElementById('newDoctor').value.toUpperCase(),
+                address: document.getElementById('newAddress').value,
+                phone: document.getElementById('newPhone').value,
+                avgRx: 0
+            };
+            doctors.push(newDoctor);
+            const doctorSelect = document.getElementById('doctorName');
+            doctorSelect.add(new Option(newDoctor.name, newDoctor.name));
+            alert('New doctor added successfully!');
+            document.getElementById('newDoctor').value = '';
+            document.getElementById('newAddress').value = '';
+            document.getElementById('newPhone').value = '';
+        }
+
+        function submitVisit() {
+            const visit = {
+                date: document.getElementById('visitDate').value,
+                doctor: document.getElementById('doctorName').value,
+                address: document.getElementById('address').value,
+                provided: document.getElementById('provided').value,
+                comments: document.getElementById('comments').value
+            };
+            
+            if (!visit.date || !visit.doctor) {
+                alert('Please fill in all required fields!');
+                return;
+            }
+
+            visits.push(visit);
+            updateVisitTable();
+            saveVisitsToDrive();
+            document.getElementById('visitDate').value = '';
+            document.getElementById('doctorName').value = '';
+            document.getElementById('address').value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('provided').value = 'none';
+            document.getElementById('comments').value = '';
+        }
+
+        function updateVisitTable() {
+            const tbody = document.getElementById('visitTableBody');
+            tbody.innerHTML = '';
+            
+            visits.forEach(visit => {
+                const doctor = doctors.find(d => d.name === visit.doctor);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${visit.date}</td>
+                    <td>${visit.doctor}</td>
+                    <td>${visit.address}</td>
+                    <td>${visit.provided}</td>
+                    <td>${visit.comments}</td>
+                    <td>${doctor ? doctor.avgRx : 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
